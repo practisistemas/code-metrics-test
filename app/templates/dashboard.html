@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Metrics - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 16px 0;
+            margin-bottom: 24px;
+        }
+        header h1 { color: #58a6ff; font-size: 1.5rem; }
+        header .subtitle { color: #8b949e; font-size: 0.875rem; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #58a6ff;
+        }
+        .stat-card .label { color: #8b949e; font-size: 0.875rem; margin-top: 4px; }
+        .stat-card.score .value { color: #3fb950; }
+        .stat-card.warn .value { color: #d29922; }
+        .stat-card.fail .value { color: #f85149; }
+
+        .section { margin-bottom: 24px; }
+        .section h2 {
+            color: #c9d1d9;
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #21262d;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #161b22;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th {
+            background: #21262d;
+            color: #8b949e;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+        td {
+            padding: 10px 12px;
+            border-top: 1px solid #21262d;
+            font-size: 0.875rem;
+        }
+        tr:hover { background: #1c2128; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-pass { background: #238636; color: #fff; }
+        .badge-fail { background: #da3633; color: #fff; }
+        .badge-pending { background: #9e6a03; color: #fff; }
+
+        .score-bar {
+            width: 100%;
+            height: 8px;
+            background: #21262d;
+            border-radius: 4px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .score-bar .fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .score-high { background: #3fb950; }
+        .score-mid { background: #d29922; }
+        .score-low { background: #f85149; }
+
+        .sha { font-family: 'SFMono-Regular', monospace; color: #58a6ff; }
+        .empty { text-align: center; padding: 40px; color: #8b949e; }
+        .refresh-btn {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 6px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+        .refresh-btn:hover { background: #30363d; }
+
+        .header-row { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-row">
+                <div>
+                    <h1>Code Metrics</h1>
+                    <p class="subtitle">Performance analysis &amp; integrity monitoring</p>
+                </div>
+                <button class="refresh-btn" onclick="location.reload()">Refresh</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Stats Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="value">{{ total_analyses }}</div>
+                <div class="label">Total Analyses</div>
+            </div>
+            <div class="stat-card {% if avg_score >= 70 %}score{% elif avg_score >= 50 %}warn{% else %}fail{% endif %}">
+                <div class="value">{{ avg_score }}</div>
+                <div class="label">Avg Quality Score</div>
+            </div>
+            <div class="stat-card">
+                <div class="value">{{ repos|length }}</div>
+                <div class="label">Repositories</div>
+            </div>
+            <div class="stat-card">
+                <div class="value">{{ pushes|length }}</div>
+                <div class="label">Recent Pushes</div>
+            </div>
+        </div>
+
+        <!-- Recent Pushes -->
+        <div class="section">
+            <h2>Recent Push Events</h2>
+            {% if pushes %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Repo</th>
+                        <th>Branch</th>
+                        <th>Pusher</th>
+                        <th>Commits</th>
+                        <th>SHA</th>
+                        <th>Score</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in pushes %}
+                    <tr>
+                        <td>{{ p.repo_name }}</td>
+                        <td>{{ p.branch }}</td>
+                        <td>{{ p.pusher }}</td>
+                        <td>{{ p.commit_count }}</td>
+                        <td><span class="sha">{{ p.head_sha[:8] if p.head_sha else '-' }}</span></td>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div class="score-bar" style="width:80px;">
+                                    <div class="fill {% if p.overall_score >= 70 %}score-high{% elif p.overall_score >= 50 %}score-mid{% else %}score-low{% endif %}"
+                                         style="width:{{ p.overall_score }}%"></div>
+                                </div>
+                                <span>{{ p.overall_score }}</span>
+                            </div>
+                        </td>
+                        <td>{{ p.timestamp.strftime('%Y-%m-%d %H:%M') if p.timestamp else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty">No push events yet. Push code to start analyzing.</div>
+            {% endif %}
+        </div>
+
+        <!-- Commit Analyses -->
+        <div class="section">
+            <h2>Commit Analyses</h2>
+            {% if recent %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Repo</th>
+                        <th>SHA</th>
+                        <th>Author</th>
+                        <th>Message</th>
+                        <th>Lines</th>
+                        <th>+/-</th>
+                        <th>Complexity</th>
+                        <th>Score</th>
+                        <th>Integrity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in recent %}
+                    <tr>
+                        <td>{{ r.repo_name }}</td>
+                        <td><span class="sha">{{ r.commit_sha[:8] }}</span></td>
+                        <td>{{ r.author }}</td>
+                        <td>{{ r.message[:50] }}{% if r.message|length > 50 %}...{% endif %}</td>
+                        <td>{{ "{:,}".format(r.total_lines) }}</td>
+                        <td style="color:#3fb950;">+{{ r.lines_added }}</td>
+                        <td>{{ r.complexity_avg }}</td>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div class="score-bar" style="width:60px;">
+                                    <div class="fill {% if r.quality_score >= 70 %}score-high{% elif r.quality_score >= 50 %}score-mid{% else %}score-low{% endif %}"
+                                         style="width:{{ r.quality_score }}%"></div>
+                                </div>
+                                <span>{{ r.quality_score }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ r.integrity_status }}">
+                                {{ r.integrity_status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty">No analyses yet. Trigger a push event to see results here.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh every 30 seconds
+        setTimeout(() => location.reload(), 30000);
+    </script>
+</body>
+</html>

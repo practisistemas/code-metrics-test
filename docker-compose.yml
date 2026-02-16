@@ -1,0 +1,35 @@
+services:
+  code-metrics:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://metrics:metrics@db:5432/code_metrics
+      - USE_POSTGRES=true
+    volumes:
+      - metrics-data:/data
+      - repo-cache:/repos
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: metrics
+      POSTGRES_PASSWORD: metrics
+      POSTGRES_DB: code_metrics
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metrics"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+volumes:
+  metrics-data:
+  pg-data:
+  repo-cache:
