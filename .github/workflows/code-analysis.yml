@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  METRICS_SERVICE_URL: ${{ secrets.METRICS_SERVICE_URL }}  # URL of your deployed code-metrics service
+  METRICS_SERVICE_URL: ${{ secrets.METRICS_SERVICE_URL }}
 
 jobs:
   analyze:
@@ -19,28 +19,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for diff analysis
+          fetch-depth: 0
 
       - name: Prepare push payload
         id: payload
         run: |
-          # Build the JSON payload for the metrics service
           REPO_NAME="${{ github.repository }}"
           REPO_URL="https://github.com/${{ github.repository }}.git"
           BRANCH="${{ github.ref_name }}"
           HEAD_SHA="${{ github.sha }}"
           PUSHER="${{ github.actor }}"
 
-          # Get commit info
           COMMIT_MSG=$(git log -1 --pretty=format:'%s' | head -c 200)
           COMMIT_AUTHOR=$(git log -1 --pretty=format:'%an')
 
-          # Get changed files
           ADDED=$(git diff --name-only --diff-filter=A HEAD~1 HEAD 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo '[]')
           MODIFIED=$(git diff --name-only --diff-filter=M HEAD~1 HEAD 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo '[]')
           REMOVED=$(git diff --name-only --diff-filter=D HEAD~1 HEAD 2>/dev/null | jq -R . | jq -s . 2>/dev/null || echo '[]')
 
-          # Build JSON payload
           PAYLOAD=$(jq -n \
             --arg repo_name "$REPO_NAME" \
             --arg repo_url "$REPO_URL" \
@@ -85,25 +81,28 @@ jobs:
           BODY=$(echo "$RESPONSE" | sed '$ d')
 
           echo "HTTP Status: $HTTP_CODE"
-          echo "Response: $BODY"
 
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Code Metrics analysis failed with HTTP $HTTP_CODE"
             exit 1
           fi
 
-          # Extract key metrics
           SCORE=$(echo "$BODY" | jq -r '.quality_score')
           INTEGRITY=$(echo "$BODY" | jq -r '.integrity')
           REPORT_URL=$(echo "$BODY" | jq -r '.report_url')
           OPINION=$(echo "$BODY" | jq -r '.claude_review.summary // "No summary"')
+          TREND_DIR=$(echo "$BODY" | jq -r '.trend.direction // "stable"')
+          TREND_DELTA=$(echo "$BODY" | jq -r '.trend.quality_delta // 0')
+          TREND_SUMMARY=$(echo "$BODY" | jq -r '.trend.summary // "No trend data"')
 
           echo "score=$SCORE" >> $GITHUB_OUTPUT
           echo "integrity=$INTEGRITY" >> $GITHUB_OUTPUT
           echo "report_url=${METRICS_SERVICE_URL}${REPORT_URL}" >> $GITHUB_OUTPUT
           echo "opinion=$OPINION" >> $GITHUB_OUTPUT
+          echo "trend_dir=$TREND_DIR" >> $GITHUB_OUTPUT
+          echo "trend_delta=$TREND_DELTA" >> $GITHUB_OUTPUT
+          echo "trend_summary=$TREND_SUMMARY" >> $GITHUB_OUTPUT
 
-          # Save full response
           echo "$BODY" > analysis-result.json
 
       - name: Download Markdown Report
@@ -126,14 +125,15 @@ jobs:
           INTEGRITY="${{ steps.analyze.outputs.integrity }}"
           OPINION="${{ steps.analyze.outputs.opinion }}"
           REPORT="${{ steps.analyze.outputs.report_url }}"
+          TREND_DIR="${{ steps.analyze.outputs.trend_dir }}"
+          TREND_DELTA="${{ steps.analyze.outputs.trend_delta }}"
 
-          # Determine score badge color
-          if (( $(echo "$SCORE >= 70" | bc -l) )); then
-            COLOR="brightgreen"
-          elif (( $(echo "$SCORE >= 50" | bc -l) )); then
-            COLOR="yellow"
+          if [ "$TREND_DIR" = "improving" ]; then
+            TREND_ICON="📈 Improving (+${TREND_DELTA})"
+          elif [ "$TREND_DIR" = "declining" ]; then
+            TREND_ICON="📉 Declining (${TREND_DELTA})"
           else
-            COLOR="red"
+            TREND_ICON="➡️ Stable"
           fi
 
           cat >> $GITHUB_STEP_SUMMARY <<EOF
@@ -143,6 +143,7 @@ jobs:
           |--------|-------|
           | **Quality Score** | **${SCORE}/100** |
           | **Integrity** | ${INTEGRITY} |
+          | **Trend** | ${TREND_ICON} |
           | **Claude Opinion** | ${OPINION} |
 
           [View Full Report](${REPORT})
@@ -151,30 +152,110 @@ jobs:
           *Analyzed by Code Metrics + Claude AI*
           EOF
 
+      - name: Post Claude opinion as commit comment
+        if: github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let result;
+            try {
+              result = JSON.parse(fs.readFileSync('analysis-result.json', 'utf8'));
+            } catch (e) {
+              console.log('No analysis result file found');
+              return;
+            }
+
+            const score = result.quality_score || 0;
+            const trend = result.trend || {};
+            const review = result.claude_review || {};
+            const metrics = result.metrics || {};
+            const reportUrl = '${{ steps.analyze.outputs.report_url }}';
+
+            let trendIcon = '➡️ Stable';
+            if (trend.direction === 'improving') {
+              trendIcon = `📈 Improving (+${(trend.quality_delta || 0).toFixed(1)})`;
+            } else if (trend.direction === 'declining') {
+              trendIcon = `📉 Declining (${(trend.quality_delta || 0).toFixed(1)})`;
+            }
+
+            let scoreEmoji = '🟢';
+            if (score < 50) scoreEmoji = '🔴';
+            else if (score < 70) scoreEmoji = '🟡';
+
+            let body = `## ${scoreEmoji} Code Metrics Analysis
+
+            | Metric | Value |
+            |--------|-------|
+            | **Quality Score** | **${score}/100** |
+            | **Integrity** | ${result.integrity || 'unknown'} |
+            | **Trend** | ${trendIcon} |
+            | **Lines** | +${metrics.lines_added || 0} / -${metrics.lines_deleted || 0} |
+            | **Complexity** | ${metrics.complexity_avg || 0} |
+            | **Maintainability** | ${metrics.maintainability_index || 0}/100 |`;
+
+            if (review.opinion) {
+              const opinion = review.opinion.substring(0, 1500);
+              body += `\n\n### Claude AI Opinion\n${opinion}`;
+            }
+
+            if (review.suggestions && review.suggestions.length > 0) {
+              body += `\n\n### Suggestions\n${review.suggestions.map(s => '- ' + s).join('\n')}`;
+            }
+
+            if (review.security) {
+              body += `\n\n### Security Notes\n${review.security}`;
+            }
+
+            if (trend.summary) {
+              body += `\n\n### Codebase Trend\n${trend.summary}`;
+            }
+
+            body += `\n\n[View Full Report](${reportUrl})\n\n---\n*Automated analysis by Code Metrics + Claude AI*`;
+
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: body
+            });
+
       - name: Comment on PR (if applicable)
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            const score = '${{ steps.analyze.outputs.score }}';
-            const integrity = '${{ steps.analyze.outputs.integrity }}';
-            const opinion = '${{ steps.analyze.outputs.opinion }}';
+            const fs = require('fs');
+            let result;
+            try {
+              result = JSON.parse(fs.readFileSync('analysis-result.json', 'utf8'));
+            } catch (e) {
+              return;
+            }
+
+            const score = result.quality_score || 0;
+            const trend = result.trend || {};
+            const review = result.claude_review || {};
             const reportUrl = '${{ steps.analyze.outputs.report_url }}';
 
-            const scoreNum = parseFloat(score);
-            let emoji = '🟢';
-            if (scoreNum < 50) emoji = '🔴';
-            else if (scoreNum < 70) emoji = '🟡';
+            let scoreEmoji = '🟢';
+            if (score < 50) scoreEmoji = '🔴';
+            else if (score < 70) scoreEmoji = '🟡';
 
-            const body = `## ${emoji} Code Metrics Analysis
+            let trendIcon = '➡️ Stable';
+            if (trend.direction === 'improving') trendIcon = `📈 +${(trend.quality_delta||0).toFixed(1)}`;
+            else if (trend.direction === 'declining') trendIcon = `📉 ${(trend.quality_delta||0).toFixed(1)}`;
+
+            const body = `## ${scoreEmoji} Code Metrics Analysis
 
             | Metric | Value |
             |--------|-------|
             | **Quality Score** | **${score}/100** |
-            | **Integrity** | ${integrity} |
+            | **Integrity** | ${result.integrity || 'unknown'} |
+            | **Trend** | ${trendIcon} |
 
             ### Claude AI Opinion
-            ${opinion}
+            ${(review.opinion || review.summary || 'No review available').substring(0, 2000)}
 
             [View Full Report](${reportUrl})
 

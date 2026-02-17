@@ -104,6 +104,14 @@ def test_analyze():
             print(f"  Complexity Avg: {metrics.get('complexity_avg', 0)}")
             print(f"  Maintainability:{metrics.get('maintainability_index', 0)}")
 
+            if "trend" in data:
+                trend = data["trend"]
+                print(f"\n  --- Trend ---")
+                print(f"  Direction:      {trend.get('direction', 'N/A')}")
+                print(f"  Quality Delta:  {trend.get('quality_delta', 0):+.1f}")
+                print(f"  Previous Score: {trend.get('previous_score', 'N/A')}")
+                print(f"  Summary:        {trend.get('summary', 'N/A')[:200]}")
+
             if "claude_review" in data:
                 review = data["claude_review"]
                 print(f"\n  --- Claude AI Review ---")

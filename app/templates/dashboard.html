@@ -4,123 +4,138 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Metrics - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0d1117;
-            color: #c9d1d9;
-            line-height: 1.6;
+            background: #0d1117; color: #c9d1d9; line-height: 1.6;
         }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
         header {
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
-            padding: 16px 0;
-            margin-bottom: 24px;
+            background: #161b22; border-bottom: 1px solid #30363d;
+            padding: 16px 0; margin-bottom: 24px;
         }
         header h1 { color: #58a6ff; font-size: 1.5rem; }
         header .subtitle { color: #8b949e; font-size: 0.875rem; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; }
 
+        /* Filter bar */
+        .filter-bar {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 16px; margin-bottom: 24px;
+            display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+        }
+        .filter-group { display: flex; flex-direction: column; gap: 4px; }
+        .filter-group label { color: #8b949e; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; }
+        .filter-group select, .filter-group input {
+            background: #0d1117; color: #c9d1d9; border: 1px solid #30363d;
+            border-radius: 6px; padding: 8px 12px; font-size: 0.875rem; min-width: 150px;
+        }
+        .btn {
+            background: #238636; color: #fff; border: none; padding: 8px 20px;
+            border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 600;
+        }
+        .btn:hover { background: #2ea043; }
+        .btn-secondary { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+        .btn-secondary:hover { background: #30363d; }
+
+        /* Stats grid */
         .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px; margin-bottom: 24px;
         }
         .stat-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 20px; text-align: center;
         }
-        .stat-card .value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #58a6ff;
-        }
+        .stat-card .value { font-size: 2rem; font-weight: 700; color: #58a6ff; }
         .stat-card .label { color: #8b949e; font-size: 0.875rem; margin-top: 4px; }
         .stat-card.score .value { color: #3fb950; }
         .stat-card.warn .value { color: #d29922; }
         .stat-card.fail .value { color: #f85149; }
 
-        .section { margin-bottom: 24px; }
-        .section h2 {
-            color: #c9d1d9;
-            font-size: 1.25rem;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
+        /* Charts */
+        .charts-grid {
+            display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 24px;
+        }
+        .charts-row {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;
+        }
+        .chart-card {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;
+        }
+        .chart-card h3 { color: #c9d1d9; font-size: 1rem; margin-bottom: 12px; }
+        .chart-card canvas { max-height: 300px; }
+
+        /* Trend panel */
+        .trend-panel {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 20px; margin-bottom: 24px; display: flex; align-items: center; gap: 20px;
+        }
+        .trend-icon { font-size: 2.5rem; }
+        .trend-info h3 { color: #c9d1d9; font-size: 1.1rem; }
+        .trend-info p { color: #8b949e; font-size: 0.875rem; }
+
+        /* Leaderboard */
+        .leaderboard {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 20px; margin-bottom: 24px;
+        }
+        .leaderboard h3 { color: #c9d1d9; font-size: 1.1rem; margin-bottom: 12px; }
+        .lb-entry {
+            display: flex; align-items: center; gap: 12px; padding: 10px 0;
             border-bottom: 1px solid #21262d;
         }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #161b22;
-            border-radius: 8px;
-            overflow: hidden;
+        .lb-entry:last-child { border-bottom: none; }
+        .lb-rank {
+            width: 32px; height: 32px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem;
         }
+        .lb-rank-1 { background: #d4a017; color: #000; }
+        .lb-rank-2 { background: #8b949e; color: #000; }
+        .lb-rank-3 { background: #a0522d; color: #fff; }
+        .lb-rank-other { background: #21262d; color: #c9d1d9; }
+        .lb-name { flex: 1; font-weight: 600; }
+        .lb-score { color: #3fb950; font-weight: 700; }
+        .lb-badges { display: flex; gap: 4px; }
+        .lb-badge {
+            font-size: 0.7rem; padding: 2px 6px; border-radius: 10px;
+            background: #1f6feb33; color: #58a6ff;
+        }
+
+        /* Section & Tables */
+        .section { margin-bottom: 24px; }
+        .section h2 {
+            color: #c9d1d9; font-size: 1.25rem; margin-bottom: 12px;
+            padding-bottom: 8px; border-bottom: 1px solid #21262d;
+        }
+        table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; }
         th {
-            background: #21262d;
-            color: #8b949e;
-            font-weight: 600;
-            text-align: left;
-            padding: 12px;
-            font-size: 0.8rem;
-            text-transform: uppercase;
+            background: #21262d; color: #8b949e; font-weight: 600; text-align: left;
+            padding: 12px; font-size: 0.8rem; text-transform: uppercase;
         }
-        td {
-            padding: 10px 12px;
-            border-top: 1px solid #21262d;
-            font-size: 0.875rem;
-        }
+        td { padding: 10px 12px; border-top: 1px solid #21262d; font-size: 0.875rem; }
         tr:hover { background: #1c2128; }
-
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
         .badge-pass { background: #238636; color: #fff; }
         .badge-fail { background: #da3633; color: #fff; }
         .badge-pending { background: #9e6a03; color: #fff; }
-
-        .score-bar {
-            width: 100%;
-            height: 8px;
-            background: #21262d;
-            border-radius: 4px;
-            overflow: hidden;
-            display: inline-block;
-            vertical-align: middle;
-        }
-        .score-bar .fill {
-            height: 100%;
-            border-radius: 4px;
-            transition: width 0.3s;
-        }
+        .badge-improving { background: #238636; color: #fff; }
+        .badge-stable { background: #9e6a03; color: #fff; }
+        .badge-declining { background: #da3633; color: #fff; }
+        .score-bar { width: 100%; height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; }
+        .score-bar .fill { height: 100%; border-radius: 4px; }
         .score-high { background: #3fb950; }
         .score-mid { background: #d29922; }
         .score-low { background: #f85149; }
-
         .sha { font-family: 'SFMono-Regular', monospace; color: #58a6ff; }
         .empty { text-align: center; padding: 40px; color: #8b949e; }
-        .refresh-btn {
-            background: #21262d;
-            color: #c9d1d9;
-            border: 1px solid #30363d;
-            padding: 6px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.875rem;
-        }
-        .refresh-btn:hover { background: #30363d; }
 
-        .header-row { display: flex; justify-content: space-between; align-items: center; }
+        @media (max-width: 768px) {
+            .charts-row { grid-template-columns: 1fr; }
+            .filter-bar { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
@@ -129,14 +144,46 @@
             <div class="header-row">
                 <div>
                     <h1>Code Metrics</h1>
-                    <p class="subtitle">Performance analysis &amp; integrity monitoring</p>
+                    <p class="subtitle">Performance analysis, integrity monitoring & AI-powered reviews</p>
                 </div>
-                <button class="refresh-btn" onclick="location.reload()">Refresh</button>
+                <button class="btn-secondary" onclick="location.reload()">Refresh</button>
             </div>
         </div>
     </header>
 
     <div class="container">
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <div class="filter-group">
+                <label>Developer</label>
+                <select id="filterDev">
+                    <option value="">Todos</option>
+                    {% for dev in developers %}
+                    <option value="{{ dev }}">{{ dev }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Repository</label>
+                <select id="filterRepo">
+                    <option value="">Todos</option>
+                    {% for r in repos %}
+                    <option value="{{ r.name }}">{{ r.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Desde</label>
+                <input type="date" id="filterFrom">
+            </div>
+            <div class="filter-group">
+                <label>Hasta</label>
+                <input type="date" id="filterTo">
+            </div>
+            <button class="btn" onclick="applyFilters()">Filtrar</button>
+            <button class="btn-secondary" onclick="clearFilters()">Limpiar</button>
+        </div>
+
         <!-- Stats Overview -->
         <div class="stats-grid">
             <div class="stat-card">
@@ -152,25 +199,58 @@
                 <div class="label">Repositories</div>
             </div>
             <div class="stat-card">
+                <div class="value">{{ developers|length }}</div>
+                <div class="label">Developers</div>
+            </div>
+            <div class="stat-card">
                 <div class="value">{{ pushes|length }}</div>
                 <div class="label">Recent Pushes</div>
             </div>
         </div>
 
-        <!-- Recent Pushes -->
+        <!-- Trend Panel -->
+        <div class="trend-panel" id="trendPanel">
+            <div class="trend-icon" id="trendIcon">--</div>
+            <div class="trend-info">
+                <h3 id="trendTitle">Loading trend...</h3>
+                <p id="trendSummary">Analyzing codebase history</p>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Score Evolution by Developer</h3>
+                <canvas id="scoreEvolutionChart"></canvas>
+            </div>
+        </div>
+
+        <div class="charts-row">
+            <div class="chart-card">
+                <h3>Push Activity by Week</h3>
+                <canvas id="pushActivityChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Quality Distribution</h3>
+                <canvas id="qualityDistChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Leaderboard -->
+        <div class="leaderboard" id="leaderboard">
+            <h3>Developer Leaderboard</h3>
+            <div id="leaderboardEntries"><div class="empty">Loading...</div></div>
+        </div>
+
+        <!-- Recent Pushes Table -->
         <div class="section">
             <h2>Recent Push Events</h2>
             {% if pushes %}
             <table>
                 <thead>
                     <tr>
-                        <th>Repo</th>
-                        <th>Branch</th>
-                        <th>Pusher</th>
-                        <th>Commits</th>
-                        <th>SHA</th>
-                        <th>Score</th>
-                        <th>Time</th>
+                        <th>Repo</th><th>Branch</th><th>Pusher</th><th>Commits</th>
+                        <th>SHA</th><th>Score</th><th>Time</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -196,26 +276,19 @@
                 </tbody>
             </table>
             {% else %}
-            <div class="empty">No push events yet. Push code to start analyzing.</div>
+            <div class="empty">No push events yet.</div>
             {% endif %}
         </div>
 
-        <!-- Commit Analyses -->
+        <!-- Commit Analyses Table -->
         <div class="section">
             <h2>Commit Analyses</h2>
             {% if recent %}
             <table>
                 <thead>
                     <tr>
-                        <th>Repo</th>
-                        <th>SHA</th>
-                        <th>Author</th>
-                        <th>Message</th>
-                        <th>Lines</th>
-                        <th>+/-</th>
-                        <th>Complexity</th>
-                        <th>Score</th>
-                        <th>Integrity</th>
+                        <th>Repo</th><th>SHA</th><th>Author</th><th>Message</th>
+                        <th>Lines</th><th>+/-</th><th>Score</th><th>Trend</th><th>Integrity</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -224,10 +297,9 @@
                         <td>{{ r.repo_name }}</td>
                         <td><span class="sha">{{ r.commit_sha[:8] }}</span></td>
                         <td>{{ r.author }}</td>
-                        <td>{{ r.message[:50] }}{% if r.message|length > 50 %}...{% endif %}</td>
+                        <td>{{ r.message[:50] if r.message else '' }}{% if r.message and r.message|length > 50 %}...{% endif %}</td>
                         <td>{{ "{:,}".format(r.total_lines) }}</td>
                         <td style="color:#3fb950;">+{{ r.lines_added }}</td>
-                        <td>{{ r.complexity_avg }}</td>
                         <td>
                             <div style="display:flex;align-items:center;gap:8px;">
                                 <div class="score-bar" style="width:60px;">
@@ -238,23 +310,198 @@
                             </div>
                         </td>
                         <td>
-                            <span class="badge badge-{{ r.integrity_status }}">
-                                {{ r.integrity_status }}
+                            <span class="badge badge-{{ r.trend_direction or 'stable' }}">
+                                {% if r.trend_direction == 'improving' %}+{{ "%.1f"|format(r.quality_delta or 0) }}
+                                {% elif r.trend_direction == 'declining' %}{{ "%.1f"|format(r.quality_delta or 0) }}
+                                {% else %}={% endif %}
                             </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ r.integrity_status }}">{{ r.integrity_status }}</span>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
             {% else %}
-            <div class="empty">No analyses yet. Trigger a push event to see results here.</div>
+            <div class="empty">No analyses yet.</div>
             {% endif %}
         </div>
     </div>
 
     <script>
-        // Auto-refresh every 30 seconds
-        setTimeout(() => location.reload(), 30000);
+    const COLORS = ['#58a6ff','#3fb950','#d29922','#f85149','#bc8cff','#39d2c0','#ff7b72','#79c0ff','#56d364','#e3b341'];
+
+    let filters = {};
+    let charts = {};
+
+    function getFilterParams() {
+        const p = new URLSearchParams();
+        const dev = document.getElementById('filterDev').value;
+        const repo = document.getElementById('filterRepo').value;
+        const from = document.getElementById('filterFrom').value;
+        const to = document.getElementById('filterTo').value;
+        if (dev) p.set('developer', dev);
+        if (repo) p.set('repo', repo);
+        if (from) p.set('from_date', from);
+        if (to) p.set('to_date', to);
+        return p.toString();
+    }
+
+    function applyFilters() {
+        loadAllCharts();
+    }
+
+    function clearFilters() {
+        document.getElementById('filterDev').value = '';
+        document.getElementById('filterRepo').value = '';
+        document.getElementById('filterFrom').value = '';
+        document.getElementById('filterTo').value = '';
+        loadAllCharts();
+    }
+
+    async function loadAllCharts() {
+        const qs = getFilterParams();
+        await Promise.all([
+            loadScoreEvolution(qs),
+            loadPushActivity(qs),
+            loadQualityDist(qs),
+            loadCodebaseTrend(qs),
+            loadLeaderboard(qs),
+        ]);
+    }
+
+    async function loadScoreEvolution(qs) {
+        const data = await fetch(`/api/stats/score-evolution?${qs}`).then(r => r.json());
+        if (charts.score) charts.score.destroy();
+
+        const datasets = data.datasets.map((ds, i) => ({
+            label: ds.developer,
+            data: ds.labels.map((l, j) => ({ x: l, y: ds.scores[j] })),
+            borderColor: COLORS[i % COLORS.length],
+            backgroundColor: COLORS[i % COLORS.length] + '33',
+            tension: 0.3, fill: false, pointRadius: 4,
+        }));
+
+        charts.score = new Chart(document.getElementById('scoreEvolutionChart'), {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { min: 0, max: 100, title: { display: true, text: 'Quality Score', color: '#8b949e' },
+                         grid: { color: '#21262d' }, ticks: { color: '#8b949e' } },
+                    x: { title: { display: true, text: 'Date', color: '#8b949e' },
+                         grid: { color: '#21262d' }, ticks: { color: '#8b949e', maxTicksLimit: 10 } }
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#c9d1d9' } }
+                }
+            }
+        });
+    }
+
+    async function loadPushActivity(qs) {
+        const data = await fetch(`/api/stats/push-activity?${qs}`).then(r => r.json());
+        if (charts.activity) charts.activity.destroy();
+
+        const datasets = data.datasets.map((ds, i) => ({
+            label: ds.developer,
+            data: ds.pushes,
+            backgroundColor: COLORS[i % COLORS.length] + 'cc',
+        }));
+
+        charts.activity = new Chart(document.getElementById('pushActivityChart'), {
+            type: 'bar',
+            data: { labels: data.labels, datasets },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { stacked: true, grid: { color: '#21262d' }, ticks: { color: '#8b949e' } },
+                    y: { stacked: true, grid: { color: '#21262d' }, ticks: { color: '#8b949e' },
+                         title: { display: true, text: 'Pushes', color: '#8b949e' } }
+                },
+                plugins: { legend: { position: 'bottom', labels: { color: '#c9d1d9' } } }
+            }
+        });
+    }
+
+    async function loadQualityDist(qs) {
+        const data = await fetch(`/api/stats/quality-distribution?${qs}`).then(r => r.json());
+        if (charts.dist) charts.dist.destroy();
+
+        charts.dist = new Chart(document.getElementById('qualityDistChart'), {
+            type: 'doughnut',
+            data: {
+                labels: data.labels,
+                datasets: [{ data: data.counts, backgroundColor: data.colors, borderWidth: 0 }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#c9d1d9' } }
+                }
+            }
+        });
+    }
+
+    async function loadCodebaseTrend(qs) {
+        const repo = document.getElementById('filterRepo').value;
+        let url = `/api/stats/codebase-trend?branch=main`;
+        if (repo) url += `&repo=${repo}`;
+
+        const data = await fetch(url).then(r => r.json());
+        const panel = document.getElementById('trendPanel');
+        const icon = document.getElementById('trendIcon');
+        const title = document.getElementById('trendTitle');
+        const summary = document.getElementById('trendSummary');
+
+        if (data.current_trend === 'improving') {
+            icon.textContent = '📈'; title.textContent = 'Codebase Improving';
+            panel.style.borderColor = '#238636';
+        } else if (data.current_trend === 'declining') {
+            icon.textContent = '📉'; title.textContent = 'Codebase Declining';
+            panel.style.borderColor = '#da3633';
+        } else {
+            icon.textContent = '➡️'; title.textContent = 'Codebase Stable';
+            panel.style.borderColor = '#30363d';
+        }
+        summary.textContent = data.trend_summary;
+    }
+
+    async function loadLeaderboard(qs) {
+        const data = await fetch(`/api/stats/leaderboard?${qs}`).then(r => r.json());
+        const container = document.getElementById('leaderboardEntries');
+
+        if (!data.rankings || data.rankings.length === 0) {
+            container.innerHTML = '<div class="empty">No data yet</div>';
+            return;
+        }
+
+        const badgeLabels = {
+            'quality-champion': 'Champion',
+            'consistent-contributor': 'Consistent',
+            'refactor-hero': 'Refactorer',
+        };
+
+        container.innerHTML = data.rankings.map(r => {
+            const rankClass = r.rank <= 3 ? `lb-rank-${r.rank}` : 'lb-rank-other';
+            const badges = (r.badges || []).map(b =>
+                `<span class="lb-badge">${badgeLabels[b] || b}</span>`
+            ).join('');
+
+            return `<div class="lb-entry">
+                <div class="lb-rank ${rankClass}">${r.rank}</div>
+                <div class="lb-name">${r.developer}</div>
+                <div class="lb-badges">${badges}</div>
+                <div class="lb-score">${r.avg_score}/100</div>
+                <div style="color:#8b949e;font-size:0.8rem;">${r.pushes} pushes</div>
+            </div>`;
+        }).join('');
+    }
+
+    // Load on page ready
+    document.addEventListener('DOMContentLoaded', loadAllCharts);
     </script>
 </body>
 </html>

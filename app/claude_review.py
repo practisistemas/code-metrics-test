@@ -5,18 +5,22 @@ Uses Claude API to:
   - Analyze code quality with AI reasoning
   - Generate opinions on push changes
   - Detect code smells and suggest improvements
-  - Produce a natural-language report
+  - Analyze codebase trends and give team recommendations
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import anthropic
 
 from app.analyzer import CommitMetrics
 from app.integrity import IntegrityResult
+
+if TYPE_CHECKING:
+    from app.trend_engine import TrendAnalysis
 
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -40,6 +44,7 @@ def _build_review_prompt(
     commit_message: str,
     repo_name: str,
     branch: str,
+    trend: TrendAnalysis | None = None,
 ) -> str:
     integrity_issues_text = ""
     if integrity.issues:
@@ -49,6 +54,17 @@ def _build_review_prompt(
         )
     else:
         integrity_issues_text = "  Ninguno"
+
+    trend_section = ""
+    if trend:
+        trend_section = f"""
+## Tendencia del Codebase
+- Direccion: {trend.direction}
+- Delta de calidad: {trend.quality_delta:+.1f} puntos
+- Score anterior: {trend.previous_score if trend.previous_score is not None else "N/A"}
+- Score actual: {trend.current_score}
+- Resumen: {trend.summary}
+"""
 
     return f"""Eres un senior code reviewer experto. Analiza el siguiente push y genera un reporte detallado en espanol.
 
@@ -71,7 +87,7 @@ def _build_review_prompt(
 - Archivos escaneados: {integrity.files_scanned}
 - Issues encontrados:
 {integrity_issues_text}
-
+{trend_section}
 ## Diff del Push (ultimas modificaciones)
 ```
 {diff_text[:15000]}
@@ -89,7 +105,9 @@ Genera tu reporte con las siguientes secciones:
 
 4. **SEGURIDAD**: Notas sobre seguridad si aplica (credenciales expuestas, vulnerabilidades, etc).
 
-5. **RESUMEN**: Un resumen de una linea con el puntaje que le darias al push (1-10).
+5. **TENDENCIA**: Analisis de la tendencia del codebase. Esta mejorando o empeorando? Que recomendaciones tienes para el equipo basado en la tendencia?
+
+6. **RESUMEN**: Un resumen de una linea con el puntaje que le darias al push (1-10).
 
 Responde en formato Markdown limpio."""
 
@@ -101,6 +119,7 @@ def review_with_claude(
     commit_message: str = "",
     repo_name: str = "",
     branch: str = "main",
+    trend: TrendAnalysis | None = None,
 ) -> ClaudeReview:
     """Send code diff and metrics to Claude for AI-powered review."""
     if not ANTHROPIC_API_KEY:
@@ -118,6 +137,7 @@ def review_with_claude(
         commit_message=commit_message,
         repo_name=repo_name,
         branch=branch,
+        trend=trend,
     )
 
     try:
@@ -175,7 +195,6 @@ def _extract_list(text: str) -> list[str]:
     for line in text.split("\n"):
         line = line.strip()
         if line.startswith(("-", "*", "1", "2", "3", "4", "5", "6", "7", "8", "9")):
-            # Strip leading markers
             cleaned = line.lstrip("-*0123456789. ").strip()
             if cleaned:
                 items.append(cleaned)
