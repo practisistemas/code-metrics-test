@@ -108,6 +108,10 @@ def detect_deprecations(directory: str) -> list[DeprecationWarning]:
             continue
 
         for fname in files:
+            # Skip self-detection (this file contains patterns as strings, not usage)
+            if fname == "deprecation_detector.py":
+                continue
+
             fpath = os.path.join(root, fname)
             ext = Path(fname).suffix.lower()
 
