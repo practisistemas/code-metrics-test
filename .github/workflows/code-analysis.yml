@@ -9,6 +9,11 @@ on:
 env:
   METRICS_SERVICE_URL: ${{ secrets.METRICS_SERVICE_URL }}
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
 jobs:
   analyze:
     name: Analyze Code Quality
