@@ -1,11 +1,14 @@
 services:
   code-metrics:
     build: .
+    container_name: code-metrics
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
       - DATABASE_URL=postgresql://metrics:metrics@db:5432/code_metrics
-      - USE_POSTGRES=true
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-5-20250929}
     volumes:
       - metrics-data:/data
       - repo-cache:/repos
@@ -15,6 +18,8 @@ services:
 
   db:
     image: postgres:16-alpine
+    container_name: code-metrics-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: metrics
       POSTGRES_PASSWORD: metrics
